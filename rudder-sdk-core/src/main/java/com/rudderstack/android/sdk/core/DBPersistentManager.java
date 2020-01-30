@@ -330,4 +330,12 @@ class DBPersistentManager extends SQLiteOpenHelper {
             RudderLogger.logError("DBPersistentManager: deleteTableData: database is not writable");
         }
     }
+
+    int getMaxStatsRecordCount() {
+        List<Integer> counts = new ArrayList<>();
+        counts.add(this.getDBCount(String.format(Locale.US, "SELECT count(*) FROM %s;", METRICS_EVENT_TABLE_NAME)));
+        counts.add(this.getDBCount(String.format(Locale.US, "SELECT count(*) FROM %s;", METRICS_CONFIG_PLANE_TABLE_NAME)));
+        counts.add(this.getDBCount(String.format(Locale.US, "SELECT count(*) FROM %s;", METRICS_DATA_PLANE_TABLE_NAME)));
+        return Collections.max(counts);
+    }
 }

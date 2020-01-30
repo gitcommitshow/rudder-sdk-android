@@ -13,19 +13,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
-import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_CONFIG_PLANE_FIELD_ID;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_CONFIG_PLANE_FIELD_RESPONSE_TIME;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_CONFIG_PLANE_FIELD_SUCCESS;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_CONFIG_PLANE_TABLE_NAME;
-import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_DATA_PLANE_FIELD_ID;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_DATA_PLANE_FIELD_RESPONSE_TIME;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_DATA_PLANE_FIELD_SIZE;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_DATA_PLANE_FIELD_SUCCESS;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_DATA_PLANE_TABLE_NAME;
-import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_EVENT_FIELD_ID;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_EVENT_FIELD_SIZE;
 import static com.rudderstack.android.sdk.core.DBPersistentManager.METRICS_EVENT_TABLE_NAME;
 
@@ -34,8 +29,6 @@ class MetricsStatsManager {
     private DBPersistentManager dbPersistentManager;
     private RudderPreferenceManager preferenceManager;
     private RudderHttpClient rudderHttpClient;
-    private boolean isFirstRun = true;
-    private ScheduledExecutorService executorService;
     private static volatile MetricsConfig metricsConfig;
 
     private MetricsStatsManager(Application application) {
@@ -48,50 +41,39 @@ class MetricsStatsManager {
         this.preferenceManager.getStatsBeginTime();
 
         RudderLogger.logVerbose("MetricsStatsManager: creating scheduled executor service");
-        if (executorService == null || executorService.isShutdown()) {
-            executorService = Executors.newSingleThreadScheduledExecutor();
-            executorService.scheduleAtFixedRate(getWorkerRunnable(), 0, Utils.STATS_DELAY_COUNT, Utils.STATS_DELAY_TIME_UNIT);
-        }
+        new Thread(getWorkerRunnable()).start();
     }
 
     private Runnable getWorkerRunnable() {
         return new Runnable() {
             @Override
             public void run() {
-                // fetch config-json from the server
-                // if server is unavailable use persisted config.
-                // if persisted config is not present, disable stats collection
-                // if config is present check and update enabled flag
-                // if enabled:
-                // ==> schedule the worker to iterate every hour to check the stats dumped and keep in the queue or requests.
-                // ==> iterate over queue requests and flush them to the server.
-                // if not enabled:
-                // ==> stop scheduled worker if started
-                RudderLogger.logVerbose("MetricsStatsManager: starting metrics operation");
-                if (isFirstRun) {
-                    RudderLogger.logVerbose("MetricsStatsManager: initial run. downloading config json");
-                    downloadConfigJson();
+                int sleepCount = 0;
+                while (isEnabled()) {
                     if (metricsConfig == null) {
-                        RudderLogger.logVerbose("MetricsStatsManager: initial run. downloaded config is null");
-                        parsePersistedConfig();
-                    }
-                    if (metricsConfig == null) {
-                        RudderLogger.logVerbose("MetricsStatsManager: initial run. persisted config is null. shutting down service");
-                        if (executorService != null && !executorService.isShutdown()) {
-                            executorService.shutdownNow();
+                        downloadConfigJson();
+                        if (metricsConfig == null) {
+                            parsePersistedConfig();
                         }
                     }
-                    isFirstRun = false;
-                }
-                if (metricsConfig != null && metricsConfig.isEnabled()) {
-                    fetchLastMetrics();
-                    flushRequestsToServer();
-                } else {
-                    RudderLogger.logVerbose("MetricsStatsManager: logging is not enabled. shutting down service");
-                    dbPersistentManager.deleteAllMetrics();
-                    dbPersistentManager.deleteAllMetricsRequest();
-                    if (executorService != null && !executorService.isShutdown()) {
-                        executorService.shutdownNow();
+                    if (metricsConfig != null) {
+                        if (metricsConfig.isEnabled()) {
+                            int maxRecordCount = dbPersistentManager.getMaxStatsRecordCount();
+                            if (maxRecordCount >= metricsConfig.getStatsConfigThreshold() || (maxRecordCount > 0 && sleepCount >= metricsConfig.getStatsConfigInterval())) {
+                                fetchLastMetrics();
+                            }
+                            flushRequestsToServer();
+                        } else {
+                            RudderLogger.logVerbose("MetricsStatsManager: logging is not enabled. shutting down metrics logger");
+                            dbPersistentManager.deleteAllMetrics();
+                            dbPersistentManager.deleteAllMetricsRequest();
+                        }
+                    }
+                    try {
+                        sleepCount += 1;
+                        Thread.sleep(Utils.STATS_DELAY_TIME_UNIT.toMillis(Utils.STATS_DELAY_COUNT));
+                    } catch (Exception e) {
+                        RudderLogger.logError(e);
                     }
                 }
             }
@@ -100,19 +82,12 @@ class MetricsStatsManager {
 
     private void fetchLastMetrics() {
         boolean logRequest = false;
-        Map<String, String> params = new HashMap<>();
+        Map<String, Object> params = new HashMap<>();
         for (MetricsStats stats : MetricsStats.values()) {
-            if (stats.getSampleRate() > 0) {
-                List<Integer> list = this.dbPersistentManager.getStats(stats.getQuerySql());
-                if (list != null && !list.isEmpty()) {
-                    logRequest = true;
-                    params.put("pr_" + stats.getParamPrefix() + "Max", String.valueOf(Utils.computeMax(list)));
-                    params.put("pr_" + stats.getParamPrefix() + "Min", String.valueOf(Utils.computeMin(list)));
-                    params.put("pr_" + stats.getParamPrefix() + "Med", String.valueOf(Utils.computeMedian(list)));
-                    float mean = Utils.computeAverage(list);
-                    params.put("pr_" + stats.getParamPrefix() + "Avg", String.valueOf(mean));
-                    params.put("pr_" + stats.getParamPrefix() + "Sd", String.valueOf(Utils.computeDeviation(list, mean)));
-                }
+            List<Integer> list = this.dbPersistentManager.getStats(stats.getQuerySql());
+            if (list != null && !list.isEmpty()) {
+                logRequest = true;
+                params.put("pr_" + stats.getParamPrefix(), list);
             }
         }
         int retryCountConfigPlane = dbPersistentManager.getRetryCountConfigPlane();
@@ -132,20 +107,11 @@ class MetricsStatsManager {
             params.put("c_os", context.getOsInfo().getName());
             params.put("c_version", context.getOsInfo().getVersion());
             params.put("c_sdk", context.getLibraryInfo().getVersion());
-            params.put("c_begin", String.valueOf(preferenceManager.getStatsBeginTime()));
+            params.put("pr_begin", String.valueOf(preferenceManager.getStatsBeginTime()));
             long statsEndTime = System.currentTimeMillis();
-            params.put("c_end", String.valueOf(statsEndTime));
+            params.put("pr_end", String.valueOf(statsEndTime));
             params.put("c_fingerprint", preferenceManager.getRudderStatsFingerPrint());
-
-            StringBuilder queryBuilder = new StringBuilder();
-            for (String key : params.keySet()) {
-                if (queryBuilder.length() > 0) {
-                    queryBuilder.append("&");
-                }
-                queryBuilder.append(String.format("%s=%s", key, params.get(key)));
-            }
-            dbPersistentManager.saveStatsRequest(String.format("%s?%s", metricsConfig.getDataPlaneUrl(), queryBuilder.toString()));
-
+            dbPersistentManager.saveStatsRequest(String.format("%s?data=%s", metricsConfig.getDataPlaneUrl(), new Gson().toJson(params)));
             dbPersistentManager.deleteAllMetrics();
             preferenceManager.updateRudderStatsBeginTime(System.currentTimeMillis());
         }
@@ -203,7 +169,7 @@ class MetricsStatsManager {
             @Override
             @NonNull
             public String getQuerySql() {
-                return String.format(Locale.US, "SELECT %s FROM %s WHERE %s IN (SELECT %s FROM %s ORDER BY RANDOM() LIMIT %d)", METRICS_EVENT_FIELD_SIZE, METRICS_EVENT_TABLE_NAME, METRICS_EVENT_FIELD_ID, METRICS_EVENT_FIELD_ID, METRICS_EVENT_TABLE_NAME, getSampleRate());
+                return String.format(Locale.US, "SELECT %s FROM %s", METRICS_EVENT_FIELD_SIZE, METRICS_EVENT_TABLE_NAME);
             }
 
             @NonNull
@@ -211,18 +177,13 @@ class MetricsStatsManager {
             public String getParamPrefix() {
                 return "eventSize";
             }
-
-            @Override
-            public int getSampleRate() {
-                return MetricsStatsManager.metricsConfig.getEventSize();
-            }
         },
         BATCH_SIZE {
             @NonNull
             @Override
             public String getQuerySql() {
                 // only consider successful batch events
-                return String.format(Locale.US, "SELECT %s FROM %s WHERE %s IN (SELECT %s FROM %s WHERE %s=1 ORDER BY RANDOM() LIMIT %d)", METRICS_DATA_PLANE_FIELD_SIZE, METRICS_DATA_PLANE_TABLE_NAME, METRICS_DATA_PLANE_FIELD_ID, METRICS_DATA_PLANE_FIELD_ID, METRICS_DATA_PLANE_TABLE_NAME, METRICS_DATA_PLANE_FIELD_SUCCESS, getSampleRate());
+                return String.format(Locale.US, "SELECT %s FROM %s WHERE %s=1", METRICS_DATA_PLANE_FIELD_SIZE, METRICS_DATA_PLANE_TABLE_NAME, METRICS_DATA_PLANE_FIELD_SUCCESS);
             }
 
             @NonNull
@@ -230,17 +191,12 @@ class MetricsStatsManager {
             public String getParamPrefix() {
                 return "batchSize";
             }
-
-            @Override
-            public int getSampleRate() {
-                return MetricsStatsManager.metricsConfig.getAverageBatchSize();
-            }
         },
         DATA_PLANE_RESPONSE_TIME {
             @NonNull
             @Override
             public String getQuerySql() {
-                return String.format(Locale.US, "SELECT %s FROM %s WHERE %s IN (SELECT %s FROM %s WHERE %s=1 ORDER BY RANDOM() LIMIT %d)", METRICS_DATA_PLANE_FIELD_RESPONSE_TIME, METRICS_DATA_PLANE_TABLE_NAME, METRICS_DATA_PLANE_FIELD_ID, METRICS_DATA_PLANE_FIELD_ID, METRICS_DATA_PLANE_TABLE_NAME, METRICS_DATA_PLANE_FIELD_SUCCESS, getSampleRate());
+                return String.format(Locale.US, "SELECT %s FROM %s WHERE %s=1", METRICS_DATA_PLANE_FIELD_RESPONSE_TIME, METRICS_DATA_PLANE_TABLE_NAME, METRICS_DATA_PLANE_FIELD_SUCCESS);
             }
 
             @NonNull
@@ -248,28 +204,18 @@ class MetricsStatsManager {
             public String getParamPrefix() {
                 return "dataPlaneResponseTime";
             }
-
-            @Override
-            public int getSampleRate() {
-                return MetricsStatsManager.metricsConfig.getDataPlaneResponseTime();
-            }
         },
         CONFIG_RESPONSE_TIME {
             @NonNull
             @Override
             public String getQuerySql() {
-                return String.format(Locale.US, "SELECT %s FROM %s WHERE %s IN (SELECT %s FROM %s WHERE %s=1 ORDER BY RANDOM() LIMIT %d)", METRICS_CONFIG_PLANE_FIELD_RESPONSE_TIME, METRICS_CONFIG_PLANE_TABLE_NAME, METRICS_CONFIG_PLANE_FIELD_ID, METRICS_CONFIG_PLANE_FIELD_ID, METRICS_CONFIG_PLANE_TABLE_NAME, METRICS_CONFIG_PLANE_FIELD_SUCCESS, getSampleRate());
+                return String.format(Locale.US, "SELECT %s FROM %s WHERE %s=1", METRICS_CONFIG_PLANE_FIELD_RESPONSE_TIME, METRICS_CONFIG_PLANE_TABLE_NAME, METRICS_CONFIG_PLANE_FIELD_SUCCESS);
             }
 
             @NonNull
             @Override
             public String getParamPrefix() {
                 return "configPlaneResponseTime";
-            }
-
-            @Override
-            public int getSampleRate() {
-                return MetricsStatsManager.metricsConfig.getConfigResponseTime();
             }
         }
     }
@@ -280,7 +226,5 @@ class MetricsStatsManager {
 
         @NonNull
         String getParamPrefix();
-
-        int getSampleRate();
     }
 }

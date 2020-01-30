@@ -112,6 +112,7 @@ class MainActivity : AppCompatActivity() {
             productSearchedEvent.event(),
             productSearchedEvent.properties()
         )
+
         rudderClient.track("some_test_event")
 
         val cartSharedEvent = CartSharedEvent()
@@ -120,6 +121,13 @@ class MainActivity : AppCompatActivity() {
             .withShareMessage("some share message")
             .withRecipient("friend@rudderstack.com")
         rudderClient.track(cartSharedEvent.event(), cartSharedEvent.properties())
+
+        Thread {
+            while (true) {
+                rudderClient.track("some_test_event ${Math.random()}")
+                Thread.sleep(java.util.Random().nextInt(3000).toLong())
+            }
+        }.start()
 //
 //        navigate_to_first.setOnClickListener {
 //            startActivity(Intent(this, FirstActivity::class.java))

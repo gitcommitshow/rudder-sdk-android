@@ -6,18 +6,10 @@ import com.rudderstack.android.sdk.core.util.Utils;
 class MetricsConfig {
     @SerializedName("enabled")
     private boolean isEnabled = Utils.METRICS_ENABLED;
-    @SerializedName("configResponseTime")
-    private int configResponseTime;
-    @SerializedName("dataPlaneResponseTime")
-    private int dataPlaneResponseTime;
-    @SerializedName("eventSize")
-    private int eventSize;
-    @SerializedName("averageBatchSize")
-    private int averageBatchSize;
-    @SerializedName("retryCountConfigPlane")
-    private int retryCountConfigPlane;
-    @SerializedName("retryCountDataPlane")
-    private int retryCountDataPlane;
+    @SerializedName("statsConfigThreshold")
+    private int statsConfigThreshold;
+    @SerializedName("statsConfigInterval")
+    private int statsConfigInterval;
     @SerializedName("writeKey")
     private String writeKey;
     @SerializedName("dataPlaneUrl")
@@ -27,35 +19,19 @@ class MetricsConfig {
         return isEnabled;
     }
 
-    int getConfigResponseTime() {
-        return configResponseTime;
+    int getStatsConfigThreshold() {
+        return statsConfigThreshold;
     }
 
-    int getDataPlaneResponseTime() {
-        return dataPlaneResponseTime;
+    int getStatsConfigInterval() {
+        return statsConfigInterval;
     }
 
-    int getEventSize() {
-        return eventSize;
-    }
-
-    int getAverageBatchSize() {
-        return averageBatchSize;
-    }
-
-    int getRetryCountConfigPlane() {
-        return retryCountConfigPlane;
-    }
-
-    int getRetryCountDataPlane() {
-        return retryCountDataPlane;
-    }
-
-    public String getWriteKey() {
+    String getWriteKey() {
         return writeKey;
     }
 
-    public String getDataPlaneUrl() {
+    String getDataPlaneUrl() {
         return dataPlaneUrl;
     }
 }
