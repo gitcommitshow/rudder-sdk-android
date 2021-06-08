@@ -6,8 +6,16 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.rudderstack.android.sdk.core.RudderClient;
+import com.rudderstack.android.sdk.core.RudderOption;
 import com.rudderstack.android.sdk.core.RudderProperty;
 import com.rudderstack.android.sdk.core.RudderTraits;
+
+import com.rudderstack.generated.Dimensions;
+import com.rudderstack.generated.SignInFailed;
+import com.rudderstack.generated.SignInSubmitted;
+import com.rudderstack.generated.SignInSucceeded;
+import com.rudderstack.generated.TypewriterAnalytics;
+import com.rudderstack.generated.UserSignedOut;
 
 import java.util.Date;
 
@@ -55,6 +63,33 @@ public class MainActivity extends AppCompatActivity {
                         .putValue("content", "Organic Content Title")
                         .putValue("ad_creative", "Red Hello World Ad")
                         .putValue("ad_group", "Red Ones")));
+
+        TypewriterAnalytics twa = new TypewriterAnalytics(RudderClient.with(this));
+        RudderOption option = new RudderOption();
+        option.putIntegration("All",false);
+
+        // Dimensions Object
+        Dimensions dim = new Dimensions.Builder().height(10d).length(10d).width(10d).build();
+
+        // Sign In Failed Event
+        SignInFailed sif = new SignInFailed.Builder().id("4008").numAttempts(1l).rememberMe(false).dimensions(dim).build();
+        twa.signInFailed(sif);
+        twa.signInFailed(sif,option);
+
+        // Sign In Submitted Event
+        SignInSubmitted sis = new SignInSubmitted.Builder().id("4009").numAttempts(21l).rememberMe(true).build();
+        twa.signInSubmitted(sis);
+        twa.signInSubmitted(sis,option);
+
+        // Sign In Succeeded Event
+        SignInSucceeded sic = new SignInSucceeded.Builder().id("4010").numAttempts(22l).rememberMe(false).build();
+        twa.signInSucceeded(sic);
+        twa.signInSucceeded(sic,option);
+
+        // User Signed out Event
+        UserSignedOut uso = new UserSignedOut.Builder().id("4011").numAttempts(23l).rememberMe(true).build();
+        twa.userSignedOut(uso);
+        twa.userSignedOut(uso,option);
 
 
     }
