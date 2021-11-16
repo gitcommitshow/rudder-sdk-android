@@ -1,7 +1,10 @@
 package com.rudderstack.android.sample.kotlin
 
 import android.app.Application
+import android.content.Context
 import android.os.Handler
+import android.util.Log
+import androidx.multidex.MultiDex
 import com.rudderstack.android.sdk.core.RudderClient
 import com.rudderstack.android.sdk.core.RudderConfig
 import com.rudderstack.android.sdk.core.RudderLogger
@@ -48,4 +51,9 @@ class MainApplication : Application() {
             rudderClient!!.track("second_event")
         }, 3000)
     }
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        MultiDex.install(this)
+    }
+
 }
