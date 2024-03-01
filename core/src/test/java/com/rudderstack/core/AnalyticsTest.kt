@@ -349,9 +349,10 @@ abstract class AnalyticsTest {
         )
         while(analytics.retrieveState<DestinationConfigState>()?.value == null){}
         busyWait(300L) // enough for server config to be downloaded
-        val rudderOptions = RudderOptions.Builder().withExternalIds(
-            listOf(mapOf("some_id" to "id"))
-        ).withIntegrations(mapOf("enabled-destination" to true, "All" to false)).build()
+        val rudderOptions = RudderOptions.Builder()
+            .withExternalId("some_id", "id")
+            .withIntegrations(mapOf("enabled-destination" to true, "All" to false))
+            .build()
 
         val dummyPlugin = mock(BaseDestinationPlugin::class.java)
         whenever(dummyPlugin.name).thenReturn("dummy")
@@ -392,7 +393,7 @@ abstract class AnalyticsTest {
         )
         assertThat(
             msg.context?.externalIds, allOf(
-                notNullValue(), iterableWithSize(1), containsInAnyOrder(mapOf("some_id" to "id"))
+                notNullValue(), iterableWithSize(1), containsInAnyOrder(mapOf("type" to "some_id", "id" to "id"))
             )
         )
     }
