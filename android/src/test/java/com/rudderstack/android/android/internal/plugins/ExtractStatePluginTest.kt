@@ -18,7 +18,6 @@ import com.rudderstack.android.internal.plugins.ExtractStatePlugin
 import com.rudderstack.core.RudderOptions
 import com.rudderstack.core.RudderUtils
 import com.rudderstack.core.BasicStorageImpl
-import com.rudderstack.core.internal.KotlinLogger
 import com.rudderstack.models.IdentifyMessage
 import org.junit.Test
 
@@ -33,9 +32,9 @@ class ExtractStatePluginTest {
     @Test
     fun `test identify with traits userId`(){
         val storage = BasicStorageImpl( )
-        val options = RudderOptions.Builder().withExternalIds(listOf(mapOf(
-            "dest-1" to "dest-1-id"
-        ))).build()
+        val options = RudderOptions.Builder()
+            .withExternalId("dest-1", "dest-1-id")
+            .build()
         val extractStatePlugin = ExtractStatePlugin()
         val identifyMsg = IdentifyMessage.create(timestamp = RudderUtils.timeStamp,
         traits = mapOf("userId" to "userId"));
@@ -54,12 +53,10 @@ class ExtractStatePluginTest {
     @Test
     fun `test identify with both options and message external ids`(){
         val storage = BasicStorageImpl( )
-        val options = RudderOptions.Builder().withExternalIds(listOf(mapOf(
-            "dest-1" to "dest-1-id"
-        ),mapOf(
-            "dest-2" to "dest-2-id"
-        )
-        )).build()
+        val options = RudderOptions.Builder()
+            .withExternalId("dest-1", "dest-1-id")
+            .withExternalId("dest-2", "dest-2-id")
+            .build()
         val extractStatePlugin = ExtractStatePlugin()
         val identifyMsg = IdentifyMessage.create(timestamp = RudderUtils.timeStamp,
         traits = mapOf("userId" to "userId"), externalIds = listOf(mapOf(
