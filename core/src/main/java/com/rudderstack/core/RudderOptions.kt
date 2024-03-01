@@ -31,7 +31,9 @@ class RudderOptions private constructor(
     val customContexts: Map<String, Any>,
 
     ) {
-    companion object{
+
+    companion object {
+
         /**
          * Default options
          *
@@ -45,8 +47,17 @@ class RudderOptions private constructor(
      *
      */
     fun newBuilder(): Builder {
-        return Builder().withExternalIds(externalIds).withIntegrations(integrations)
-            .withCustomContexts(customContexts)
+        return Builder().apply {
+            externalIds.map {
+                it["type"]?.let { type ->
+                    it["id"]?.let { id ->
+                        withExternalId(type, id)
+                    }
+                }
+            }
+            withIntegrations(integrations)
+            withCustomContexts(customContexts)
+        }
     }
 
     /**
@@ -54,13 +65,16 @@ class RudderOptions private constructor(
      *
      */
     class Builder {
-        private var _externalIds: List<Map<String, String>> = listOf()
+
+        private var _externalIds: MutableList<MutableMap<String, String>> = mutableListOf()
         private var _integrations: Map<String, Boolean> = mapOf()
         private var _customContexts: Map<String, Any> = mapOf()
 
-
-        fun withExternalIds(externalIds: List<Map<String, String>>): Builder {
-            this._externalIds = externalIds
+        fun withExternalId(type: String, id: String): Builder {
+            val existingId = _externalIds.find { it["type"] == type }
+            existingId?.let { it["id"] = id } ?: run {
+                _externalIds.add(mutableMapOf("type" to type, "id" to id))
+            }
             return this
         }
 
