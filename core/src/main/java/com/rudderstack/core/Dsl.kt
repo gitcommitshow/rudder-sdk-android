@@ -226,14 +226,19 @@ class StringScope internal constructor(){
 @OptionsScopeDslMarker
 class RudderOptionsScope internal constructor() {
 
-    //    private var rudderOptionsBuilder: RudderOptions.Builder = RudderOptions.Builder()
     internal val rudderOptions: RudderOptions?
         get() {
             externalIds ?: integrations ?: customContexts ?: return null
-            return RudderOptions.Builder().also { builder ->
-                externalIds?.let { builder.withExternalIds(it) }
-                integrations?.let { builder.withIntegrations(it) }
-                customContexts?.let { builder.withCustomContexts(it) }
+            return RudderOptions.Builder().apply {
+                externalIds?.map {
+                    it["type"]?.let { type ->
+                        it["id"]?.let { id ->
+                            withExternalId(type, id)
+                        }
+                    }
+                }
+                integrations?.let { withIntegrations(it) }
+                customContexts?.let { withCustomContexts(it) }
             }.build()
         }
 
