@@ -127,6 +127,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 "Sending an error"
             }
 
+            AnalyticsState.ResetAnalytics -> {
+                _rudderAnalytics?.reset()
+                "Resetting Rudder Analytics"
+            }
+
             else -> "What's this?"
         }
         if (log.isNotEmpty())

@@ -19,5 +19,6 @@ sealed class AnalyticsState(val eventName: String) {
     object ScreenEvent : AnalyticsState("Screen")
     object OptInAnalytics : AnalyticsState("Opt In/Out")
     object ForceFlush : AnalyticsState("Force Flush")
+    object ResetAnalytics : AnalyticsState("Reset")
     object SendError : AnalyticsState("Send Error")
 }

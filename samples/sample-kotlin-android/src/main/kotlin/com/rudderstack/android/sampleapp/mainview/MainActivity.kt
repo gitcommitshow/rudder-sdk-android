@@ -129,6 +129,12 @@ class MainActivity : ComponentActivity() {
             )
             Spacer(modifier = Modifier.height(8.dp))
             CreateRowOfApis(
+                names = arrayOf(AnalyticsState.ResetAnalytics),
+                weight = .5f,
+                viewModel = viewModel
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            CreateRowOfApis(
                 names = arrayOf(AnalyticsState.SendError),
                 weight = .5f,
                 viewModel = viewModel
